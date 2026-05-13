@@ -4,7 +4,7 @@ import plotly.express as px
 
 # 1. CONFIGURAÇÃO DA PÁGINA (ESTILO DASHBOARD PROFISSIONAL)
 st.set_page_config(
-    page_title="DataExtractor Pro | Análise de Eventos",
+    page_title="DataExtractor | Análise de Eventos",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
