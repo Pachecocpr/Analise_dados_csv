@@ -1,13 +1,24 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import requests
-import os
+import google.generativeai as genai
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="DataExtractor Pro + IA", layout="wide", page_icon="📊")
 
-# --- 2. ESTILO VISUAL (CSS) ---
+# --- 2. CONFIGURAÇÃO DA IA (GEMINI) ---
+# Tenta pegar a chave dos segredos do Streamlit ou de um campo de texto
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
+else:
+    with st.sidebar:
+        st.warning("⚠️ API Key não encontrada nos Secrets.")
+        api_key = st.text_input("Insira sua Gemini API Key:", type="password")
+
+if api_key:
+    genai.configure(api_key=api_key)
+
+# --- 3. ESTILO VISUAL ---
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -15,88 +26,66 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. FUNÇÃO DE IA (HUGGING FACE - GRATUITA) ---
-def consultar_ia_gratis(prompt_texto):
-    # Usando um modelo público do Hugging Face (Llama-3 ou Mistral)
-    API_URL = "https://api-inference.huggingface.co/models/Mistral-7B-Instruct-v0.2"
-    # Esta é uma chave pública temporária para teste, o ideal é criar a sua no site Hugging Face (grátis)
-    headers = {"Authorization": "Bearer hf_VmdYlbpXpXpXpXpXpXpXpXpXpXpXpX"} # Apenas exemplo
-    
-    payload = {
-        "inputs": f"<s>[INST] {prompt_texto} [/INST]",
-        "parameters": {"max_new_tokens": 500, "temperature": 0.7}
-    }
-    
-    try:
-        # Tenta usar uma API de chat alternativa se a primeira falhar
-        response = requests.post(API_URL, json=payload, timeout=10)
-        output = response.json()
-        return output[0]['generated_text'].split('[/INST]')[-1]
-    except:
-        return "A IA gratuita está processando muitas requisições agora. Por favor, tente novamente em 30 segundos."
-
 # --- 4. BARRA LATERAL ---
 with st.sidebar:
-    st.title("🌐 DataSystem v2.0")
+    st.title("🌐 DataSystem Pro")
     menu = st.radio("Navegação:", ["🏠 Home", "📁 Dados", "📈 Gráficos", "🤖 Analista IA"])
 
 # --- 5. LÓGICA DE DADOS ---
-if 'meu_df' not in st.session_state:
-    st.session_state['meu_df'] = None
-
 if menu == "🏠 Home":
-    st.title("🚀 Analisador de Dados Pro")
-    st.write("Importe seus arquivos e gere insights automáticos.")
+    st.title("🚀 Analisador de Dados Inteligente")
+    st.write("Importe arquivos CSV ou Excel e use o poder do Gemini para analisar seus dados.")
 
 elif menu == "📁 Dados":
-    st.title("📁 Importação")
-    arquivo = st.file_uploader("Suba seu CSV ou Excel", type=["csv", "xlsx"])
+    st.title("📁 Importação de Arquivos")
+    arquivo = st.file_uploader("Suba seu arquivo", type=["csv", "xlsx"])
     if arquivo:
-        try:
-            df = pd.read_csv(arquivo) if arquivo.name.endswith('.csv') else pd.read_excel(arquivo)
-            # Converter datas
-            for col in df.columns:
-                if any(p in col.lower() for p in ['date', 'data', 'start']):
-                    df[col] = pd.to_datetime(df[col], errors='coerce')
-            st.session_state['meu_df'] = df
-            st.success("Dados carregados!")
-            st.dataframe(df.head(50))
-        except Exception as e:
-            st.error(f"Erro: {e}")
+        df = pd.read_csv(arquivo) if arquivo.name.endswith('.csv') else pd.read_excel(arquivo)
+        for col in df.columns:
+            if any(p in col.lower() for p in ['date', 'data', 'start']):
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+        st.session_state['meu_df'] = df
+        st.success("Dados carregados com sucesso!")
+        st.dataframe(df.head(50))
 
 elif menu == "📈 Gráficos":
-    st.title("📈 Gráficos de Eventos")
-    if st.session_state['meu_df'] is not None:
+    st.title("📈 Visualizações Estatísticas")
+    if 'meu_df' in st.session_state:
         df = st.session_state['meu_df']
+        t1, t2, t3 = st.tabs(["🕒 Linha do Tempo", "📊 Top Marcas", "⚙️ Customizado"])
         
-        tab1, tab2 = st.tabs(["🕒 Tempo", "📊 Categorias"])
-        
-        with tab1:
-            col_data = st.selectbox("Coluna de Data", df.select_dtypes(include=['datetime64']).columns if not df.select_dtypes(include=['datetime64']).columns.empty else df.columns)
+        with t1:
+            col_data = st.selectbox("Coluna de Data", df.select_dtypes(include=['datetime64']).columns)
             df_temp = df.groupby(df[col_data].dt.date).size().reset_index(name='Quantidade')
-            fig = px.line(df_temp, x=col_data, y='Quantidade', title="Eventos por Dia")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(px.line(df_temp, x=col_data, y='Quantidade', title="Registros por Dia"), use_container_width=True)
             
-        with tab2:
-            col_cat = st.selectbox("Categoria", df.columns)
-            df_cat = df[col_cat].value_counts().head(10).reset_index()
-            fig2 = px.bar(df_cat, x='count', y=col_cat, orientation='h', title="Top 10")
-            st.plotly_chart(fig2, use_container_width=True)
+        with t2:
+            # Focado no seu arquivo: Vehicle Make
+            col_cat = st.selectbox("Escolha a Categoria", df.columns, index=min(10, len(df.columns)-1))
+            df_cat = df[col_cat].value_counts().head(15).reset_index()
+            st.plotly_chart(px.bar(df_cat, x='count', y=col_cat, orientation='h', title="Top 15"), use_container_width=True)
+
+        with t3:
+            c1, c2 = st.columns(2)
+            x = c1.selectbox("Eixo X", df.columns)
+            y = c2.selectbox("Eixo Y", df.select_dtypes(include='number').columns)
+            st.plotly_chart(px.scatter(df, x=x, y=y, color=x), use_container_width=True)
     else:
-        st.warning("Suba um arquivo primeiro.")
+        st.warning("Por favor, suba um arquivo primeiro.")
 
 elif menu == "🤖 Analista IA":
-    st.title("🤖 Analista Virtual (Grátis)")
-    if st.session_state['meu_df'] is not None:
-        df = st.session_state['meu_df']
-        pergunta = st.text_area("O que deseja saber sobre os dados?")
-        
-        if st.button("Analisar"):
-            resumo = f"Dados: {df.shape[0]} linhas. Colunas: {list(df.columns)}. Amostra: {df.iloc[:2, :5].to_string()}"
-            prompt = f"Analise estes dados: {resumo}. Pergunta: {pergunta}. Responda em Português."
-            
-            with st.spinner("Pensando..."):
-                resposta = consultar_ia_gratis(prompt)
-                st.info(resposta)
+    st.title("🤖 Analista Virtual (Gemini)")
+    if 'meu_df' in st.session_state:
+        if not api_key:
+            st.error("Insira a API Key na barra lateral para usar a IA.")
+        else:
+            df = st.session_state['meu_df']
+            pergunta = st.text_input("O que você deseja saber sobre esses dados?")
+            if st.button("Analisar"):
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                contexto = f"Dataset com {len(df)} linhas. Colunas: {list(df.columns)}. Amostra: {df.head(3).to_string()}"
+                with st.spinner("IA processando..."):
+                    response = model.generate_content(f"{contexto}\n\nPergunta: {pergunta}")
+                    st.info(response.text)
     else:
-        st.error("Suba um arquivo primeiro.")
+        st.error("Sem dados para analisar.")
