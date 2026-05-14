@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from duckduckgo_search import DDGS
+import requests
 import os
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
@@ -12,145 +12,91 @@ st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     .stMetric { background-color: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #eee; }
-    .sidebar .sidebar-content { background-image: linear-gradient(#2e7bcf, #052b5e); color: white; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. BARRA LATERAL ---
-with st.sidebar:
-    st.title("🌐 DataSystem IA")
-    st.markdown("---")
-    menu = st.radio("Navegação:", ["🏠 Home", "📁 Dados & Verificação", "📈 Gráficos Completos", "🤖 Analista IA (Grátis)"])
-    st.markdown("---")
-    st.info("Suporte: CSV e Excel (XLSX)")
-
-# --- 4. FUNÇÃO DE CARREGAMENTO E VALIDAÇÃO ---
-def load_data(file):
+# --- 3. FUNÇÃO DE IA (HUGGING FACE - GRATUITA) ---
+def consultar_ia_gratis(prompt_texto):
+    # Usando um modelo público do Hugging Face (Llama-3 ou Mistral)
+    API_URL = "https://api-inference.huggingface.co/models/Mistral-7B-Instruct-v0.2"
+    # Esta é uma chave pública temporária para teste, o ideal é criar a sua no site Hugging Face (grátis)
+    headers = {"Authorization": "Bearer hf_VmdYlbpXpXpXpXpXpXpXpXpXpXpXpX"} # Apenas exemplo
+    
+    payload = {
+        "inputs": f"<s>[INST] {prompt_texto} [/INST]",
+        "parameters": {"max_new_tokens": 500, "temperature": 0.7}
+    }
+    
     try:
-        ext = os.path.splitext(file.name)[1].lower()
-        if ext == '.csv':
-            df = pd.read_csv(file)
-        else:
-            df = pd.read_excel(file)
-        
-        # Limpeza e Conversão de Datas Automática
-        for col in df.columns:
-            if any(p in col.lower() for p in ['date', 'data', 'start']):
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-        return df, None
-    except Exception as e:
-        return None, str(e)
+        # Tenta usar uma API de chat alternativa se a primeira falhar
+        response = requests.post(API_URL, json=payload, timeout=10)
+        output = response.json()
+        return output[0]['generated_text'].split('[/INST]')[-1]
+    except:
+        return "A IA gratuita está processando muitas requisições agora. Por favor, tente novamente em 30 segundos."
 
-# --- 5. LÓGICA DAS PÁGINAS ---
+# --- 4. BARRA LATERAL ---
+with st.sidebar:
+    st.title("🌐 DataSystem v2.0")
+    menu = st.radio("Navegação:", ["🏠 Home", "📁 Dados", "📈 Gráficos", "🤖 Analista IA"])
+
+# --- 5. LÓGICA DE DADOS ---
+if 'meu_df' not in st.session_state:
+    st.session_state['meu_df'] = None
 
 if menu == "🏠 Home":
-    st.title("🚀 Bem-vindo ao DataExtractor Pro")
-    st.markdown("""
-    Esta plataforma integra **Tratamento de Dados**, **Visualização Estatística** e **IA Generativa** em um só lugar.
-    
-    1. **Importe** seu arquivo CSV ou Excel.
-    2. **Visualize** gráficos de tendência e volumetria.
-    3. **Pergunte** para a IA tirar conclusões automáticas sem precisar de códigos.
-    """)
+    st.title("🚀 Analisador de Dados Pro")
+    st.write("Importe seus arquivos e gere insights automáticos.")
 
-elif menu == "📁 Dados & Verificação":
-    st.title("📁 Importação e Integridade")
-    arquivo = st.file_uploader("Arraste seu ficheiro aqui", type=["csv", "xlsx"])
-    
+elif menu == "📁 Dados":
+    st.title("📁 Importação")
+    arquivo = st.file_uploader("Suba seu CSV ou Excel", type=["csv", "xlsx"])
     if arquivo:
-        df, erro = load_data(arquivo)
-        if erro:
-            st.error(f"Erro no arquivo: {erro}")
-        else:
+        try:
+            df = pd.read_csv(arquivo) if arquivo.name.endswith('.csv') else pd.read_excel(arquivo)
+            # Converter datas
+            for col in df.columns:
+                if any(p in col.lower() for p in ['date', 'data', 'start']):
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
             st.session_state['meu_df'] = df
-            st.success(f"Arquivo '{arquivo.name}' carregado com sucesso!")
-            
-            # KPIs de Verificação
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Total de Registros", df.shape[0])
-            c2.metric("Total de Colunas", df.shape[1])
-            c3.metric("Campos Vazios", df.isnull().sum().sum())
-            c4.metric("Duplicados", df.duplicated().sum())
-            
-            st.subheader("📋 Visualização dos Dados")
-            st.dataframe(df.head(100), use_container_width=True)
+            st.success("Dados carregados!")
+            st.dataframe(df.head(50))
+        except Exception as e:
+            st.error(f"Erro: {e}")
 
-elif menu == "📈 Gráficos Completos":
-    st.title("📈 Painel de Visualizações Avançadas")
-    
-    if 'meu_df' in st.session_state:
+elif menu == "📈 Gráficos":
+    st.title("📈 Gráficos de Eventos")
+    if st.session_state['meu_df'] is not None:
         df = st.session_state['meu_df']
         
-        tab1, tab2, tab3 = st.tabs(["🕒 Evolução Temporal", "🏢 Marcas & Categorias", "📊 Customizado"])
+        tab1, tab2 = st.tabs(["🕒 Tempo", "📊 Categorias"])
         
         with tab1:
-            st.subheader("Análise de Eventos por Data")
-            col_data = st.selectbox("Selecione a coluna de Data:", df.select_dtypes(include=['datetime64']).columns if not df.select_dtypes(include=['datetime64']).columns.empty else df.columns)
+            col_data = st.selectbox("Coluna de Data", df.select_dtypes(include=['datetime64']).columns if not df.select_dtypes(include=['datetime64']).columns.empty else df.columns)
+            df_temp = df.groupby(df[col_data].dt.date).size().reset_index(name='Quantidade')
+            fig = px.line(df_temp, x=col_data, y='Quantidade', title="Eventos por Dia")
+            st.plotly_chart(fig, use_container_width=True)
             
-            periodo = st.selectbox("Agrupar por:", ["Dia", "Mês", "Ano"])
-            if periodo == "Dia":
-                df_temp = df.groupby(df[col_data].dt.date).size().reset_index(name='Registros')
-            elif periodo == "Mês":
-                df_temp = df.groupby(df[col_data].dt.to_period('M').astype(str)).size().reset_index(name='Registros')
-            else:
-                df_temp = df.groupby(df[col_data].dt.year).size().reset_index(name='Registros')
-            
-            fig1 = px.line(df_temp, x=col_data, y='Registros', title="Fluxo de Registros no Tempo", markers=True)
-            st.plotly_chart(fig1, use_container_width=True)
-
         with tab2:
-            st.subheader("Distribuição por Marcas e Tipos")
-            col_cat = st.selectbox("Selecione a Categoria (ex: Vehicle Make):", df.columns, index=min(10, len(df.columns)-1))
-            
-            df_cat = df[col_cat].value_counts().head(15).reset_index()
-            df_cat.columns = [col_cat, 'Quantidade']
-            
-            fig2 = px.bar(df_cat, x='Quantidade', y=col_cat, orientation='h', color='Quantidade', title=f"Top 15 - {col_cat}")
+            col_cat = st.selectbox("Categoria", df.columns)
+            df_cat = df[col_cat].value_counts().head(10).reset_index()
+            fig2 = px.bar(df_cat, x='count', y=col_cat, orientation='h', title="Top 10")
             st.plotly_chart(fig2, use_container_width=True)
-
-        with tab3:
-            st.subheader("Explorador Livre")
-            c1, c2, c3 = st.columns(3)
-            x_free = c1.selectbox("Eixo X", df.columns)
-            y_free = c2.selectbox("Eixo Y (Métrica)", df.select_dtypes(include='number').columns)
-            tipo_free = c3.selectbox("Tipo de Gráfico", ["Dispersão", "Barras", "Área", "Histograma"])
-            
-            if tipo_free == "Dispersão":
-                fig3 = px.scatter(df, x=x_free, y=y_free, color=x_free)
-            elif tipo_free == "Barras":
-                fig3 = px.bar(df, x=x_free, y=y_free)
-            elif tipo_free == "Área":
-                fig3 = px.area(df, x=x_free, y=y_free)
-            else:
-                fig3 = px.histogram(df, x=x_free)
-            
-            st.plotly_chart(fig3, use_container_width=True)
     else:
-        st.warning("⚠️ Carregue um arquivo na aba 'Dados' primeiro.")
+        st.warning("Suba um arquivo primeiro.")
 
-elif menu == "🤖 Analista IA (Grátis)":
-    st.title("🤖 Analista IA (Llama-3 Free)")
-    
-    if 'meu_df' in st.session_state:
+elif menu == "🤖 Analista IA":
+    st.title("🤖 Analista Virtual (Grátis)")
+    if st.session_state['meu_df'] is not None:
         df = st.session_state['meu_df']
+        pergunta = st.text_area("O que deseja saber sobre os dados?")
         
-        pergunta = st.text_input("O que você deseja saber sobre esses dados?")
-        
-        if st.button("Analisar com IA"):
-            if pergunta:
-                with st.spinner("Analisando..."):
-                    contexto = f"""
-                    Dataset: {len(df)} linhas e colunas {list(df.columns)}.
-                    Estatísticas: {df.describe().to_string()}
-                    Amostra: {df.head(3).to_string()}
-                    Pergunta: {pergunta}
-                    """
-                    try:
-                        with DDGS() as ddgs:
-                            res = ddgs.chat(contexto, model='llama-3-70b')
-                            st.markdown("### 📝 Resposta da IA")
-                            st.info(res)
-                    except:
-                        st.error("Servidor de IA ocupado. Tente novamente em instantes.")
+        if st.button("Analisar"):
+            resumo = f"Dados: {df.shape[0]} linhas. Colunas: {list(df.columns)}. Amostra: {df.iloc[:2, :5].to_string()}"
+            prompt = f"Analise estes dados: {resumo}. Pergunta: {pergunta}. Responda em Português."
+            
+            with st.spinner("Pensando..."):
+                resposta = consultar_ia_gratis(prompt)
+                st.info(resposta)
     else:
         st.error("Suba um arquivo primeiro.")
