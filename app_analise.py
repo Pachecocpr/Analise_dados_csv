@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import os  # Necessário para verificar a extensão do arquivo
+import os  # Necessário para tratar extensões de arquivos
 
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA (ESTILO DASHBOARD PROFISSIONAL)
 st.set_page_config(
-    page_title="DataExtractor | Análise Multiformato",
+    page_title="DataExtractor | Análise de Eventos",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. ESTILO CSS
+# 2. ESTILO CSS PARA CUSTOMIZAÇÃO VISUAL
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -29,22 +29,22 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. BARRA LATERAL
+# 3. BARRA LATERAL - NAVEGAÇÃO DO SISTEMA
 with st.sidebar:
-    st.title("🌐 DataSystem v1.1")
+    st.title("🌐 DataSystem v1.0")
     st.markdown("---")
     menu = st.radio(
         "Navegação do Sistema:",
         ["🏠 Painel Inicial", "📁 Importar & Extrair", "📈 Gráficos Interativos"]
     )
     st.markdown("---")
-    st.info("💡 **Dica:** Agora aceitamos ficheiros CSV, XLSX e XLS.")
+    st.info("💡 **Dica:** Carregue arquivos CSV ou Excel na aba 'Importar' para liberar as análises.")
 
-# 4. FUNÇÃO DE APOIO: KPI
+# 4. FUNÇÃO DE APOIO: EXTRAÇÃO DE METADADOS
 def mostrar_kpis(df):
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.metric("Total de Linhas", df.shape[0])
+        st.metric("Total de Linhas (Eventos)", df.shape[0])
     with c2:
         st.metric("Total de Colunas", df.shape[1])
     with c3:
@@ -52,36 +52,37 @@ def mostrar_kpis(df):
         st.metric("Dados Ausentes", nulos, delta=f"{nulos} células", delta_color="inverse")
     with c4:
         cols_num = len(df.select_dtypes(include=['number']).columns)
-        st.metric("Colunas Numéricas", cols_num)
+        st.metric("Colunas Métricas", cols_num)
 
 # 5. LÓGICA DAS PÁGINAS
 if menu == "🏠 Painel Inicial":
     st.title("Bem-vindo ao DataExtractor Pro")
     st.markdown("""
-    Esta aplicação foi desenhada para transformar ficheiros **CSV** e **Excel** em insights visuais imediatos.
+    Esta aplicação foi desenhada para transformar ficheiros **CSV** e **Excel** brutos em insights visuais imediatos.
     
     **Como utilizar:**
-    1. Vá até a aba **Importar & Extrair**.
+    1. Vá até a aba **Importar & Extrair** no menu lateral.
     2. Arraste o seu ficheiro (**CSV, XLSX ou XLS**).
     3. O sistema fará o tratamento automático de datas e tipos de dados.
     4. Explore os resultados na aba de **Gráficos**.
     """)
+    st.image("https://streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png", width=200)
 
 elif menu == "📁 Importar & Extrair":
     st.title("📁 Gestão de Ficheiros e Extração")
     
-    # ATUALIZADO: Aceita múltiplos formatos
+    # Atualizado para aceitar múltiplos formatos
     arquivo_subido = st.file_uploader("Arraste o seu ficheiro aqui", type=["csv", "xlsx", "xls"])
 
     if arquivo_subido:
         try:
-            # LÓGICA DE TRATAMENTO POR EXTENSÃO
-            extensao = os.path.splitext(arquivo_subido.name)[1].lower()
-            
+            # Lógica para identificar a extensão e carregar o arquivo corretamente
+            nome_arquivo = arquivo_subido.name
+            extensao = os.path.splitext(nome_arquivo)[1].lower()
+
             if extensao == '.csv':
                 df = pd.read_csv(arquivo_subido, sep=',')
-            else:
-                # Carrega Excel (XLSX ou XLS)
+            elif extensao in ['.xlsx', '.xls']:
                 df = pd.read_excel(arquivo_subido)
             
             # --- TRATAMENTO AUTOMÁTICO DE DATAS ---
@@ -89,20 +90,25 @@ elif menu == "📁 Importar & Extrair":
                 if any(palavra in col.lower() for palavra in ['date', 'data', 'start', 'end']):
                     df[col] = pd.to_datetime(df[col], errors='coerce')
 
+            # Guardar no estado da sessão para outras abas
             st.session_state['meu_df'] = df
-            st.success(f"✅ Ficheiro '{arquivo_subido.name}' processado com sucesso!")
             
+            st.success(f"✅ Ficheiro '{nome_arquivo}' processado com sucesso!")
+            
+            # Mostrar Indicadores
             st.subheader("📊 Resumo da Extração")
             mostrar_kpis(df)
             
-            st.subheader("📋 Visualização dos Dados")
+            # Mostrar Tabela
+            st.subheader("📋 Visualização dos Dados Brutos")
             st.dataframe(df, use_container_width=True)
             
+            # Análise Estatística
             with st.expander("🔍 Ver Análise Estatística Detalhada"):
                 st.write(df.describe(include='all', datetime_is_numeric=True).fillna("-"))
         
         except Exception as e:
-            st.error(f"Erro ao processar o ficheiro: {e}")
+            st.error(f"Erro ao carregar o arquivo: {e}")
 
     else:
         st.warning("⚠️ Aguardando upload de ficheiro para iniciar a extração.")
@@ -113,50 +119,54 @@ elif menu == "📈 Gráficos Interativos":
     if 'meu_df' in st.session_state:
         df = st.session_state['meu_df']
         
+        # Filtros de Gráfico
         c1, c2 = st.columns([1, 4])
         
         with c1:
             st.subheader("Configurações")
-            eixo_x = st.selectbox("Eixo X", df.columns)
-            modo_y = st.radio("Métrica:", ["Contagem (Linhas)", "Valor Numérico"])
+            eixo_x = st.selectbox("Eixo X (Categorias/Datas)", df.columns)
             
-            y_final = None
-            if modo_y == "Valor Numérico":
+            modo_y = st.radio("Métrica do Eixo Y:", ["Contagem de Eventos (Linhas)", "Valor de Coluna Numérica"])
+            
+            if modo_y == "Valor de Coluna Numérica":
                 colunas_num = df.select_dtypes(include=['number']).columns
-                if not colunas_num.empty:
-                    y_final = st.selectbox("Selecione a Métrica", colunas_num)
+                if len(colunas_num) > 0:
+                    eixo_y = st.selectbox("Selecione a Métrica", colunas_num)
                 else:
-                    st.error("Sem colunas numéricas.")
-                    modo_y = "Contagem (Linhas)"
-
-            tipo_grafico = st.selectbox("Estilo", ["Barras", "Linhas", "Área", "Dispersão"])
-            cor_por = st.selectbox("Colorir por", [None] + list(df.columns))
+                    st.error("Nenhuma coluna numérica encontrada.")
+                    modo_y = "Contagem de Eventos (Linhas)"
+            
+            tipo_grafico = st.selectbox("Estilo do Gráfico", ["Barras", "Linhas", "Área", "Dispersão"])
+            cor_por = st.selectbox("Colorir por (Legenda)", [None] + list(df.columns))
 
         with c2:
             st.subheader("Visualização")
+            
             try:
-                if modo_y == "Contagem (Linhas)":
-                    df_plot = df.groupby(eixo_x).size().reset_index(name='Total')
-                    y_plot = 'Total'
+                if modo_y == "Contagem de Eventos (Linhas)":
+                    df_plot = df.groupby(eixo_x).size().reset_index(name='Total de Eventos')
+                    y_final = 'Total de Eventos'
                 else:
                     df_plot = df
-                    y_plot = y_final
+                    y_final = eixo_y
 
                 if tipo_grafico == "Barras":
-                    fig = px.bar(df_plot, x=eixo_x, y=y_plot, color=cor_por, template="plotly_white")
+                    fig = px.bar(df_plot, x=eixo_x, y=y_final, color=cor_por, barmode='group', template="plotly_white")
                 elif tipo_grafico == "Linhas":
-                    fig = px.line(df_plot, x=eixo_x, y=y_plot, color=cor_por, markers=True)
+                    fig = px.line(df_plot, x=eixo_x, y=y_final, color=cor_por, markers=True)
                 elif tipo_grafico == "Área":
-                    fig = px.area(df_plot, x=eixo_x, y=y_plot, color=cor_por)
+                    fig = px.area(df_plot, x=eixo_x, y=y_final, color=cor_por)
                 else:
-                    fig = px.scatter(df_plot, x=eixo_x, y=y_plot, color=cor_por)
+                    fig = px.scatter(df_plot, x=eixo_x, y=y_final, color=cor_por)
 
+                fig.update_layout(hovermode="x unified")
                 st.plotly_chart(fig, use_container_width=True)
+                
             except Exception as e:
                 st.error(f"Erro ao gerar gráfico: {e}")
     else:
-        st.error("❌ Por favor, carregue um ficheiro primeiro.")
+        st.error("❌ Erro: Nenhum dado carregado. Vá à aba 'Importar & Extrair' primeiro.")
 
 # 6. RODAPÉ
 st.markdown("---")
-st.caption("DataExtractor Pro - Suporte para CSV e Excel.")
+st.caption("DataExtractor Pro - Desenvolvido para análise rápida de CSV e Excel em Python.")
