@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
-from google import genai  # Biblioteca oficial e atualizada do Google AI
+from google import genai
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
@@ -30,33 +30,29 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO DA IA NO MODO SEGURO ---
-# O método .get evita que o código quebre caso a chave ainda não tenha sido configurada
+# --- INICIALIZAÇÃO SEGURA DA IA ---
 api_key = st.secrets.get("GEMINI_API_KEY")
 ai_disponivel = False
 
 if api_key:
     try:
-        # Inicializa o cliente oficial do GenAI
         client = genai.Client(api_key=api_key)
         ai_disponivel = True
     except Exception as e:
         st.sidebar.error(f"Erro ao inicializar o Gemini: {e}")
-else:
-    st.sidebar.warning("⚠️ IA Desativada: Configure a 'GEMINI_API_KEY' para liberar o chat.")
 
-# 3. BARRA LATERAL
+# 3. BARRA LATERAL (Sem risco de NameError)
 with st.sidebar:
-    st.title("🌐 DataSystem v1.2")
+    st.title("🌐 DataSystem v1.3")
     st.markdown("---")
     
     opcoes_menu = ["🏠 Painel Inicial", "📁 Importar & Extrair", "📈 Gráficos Interativos"]
     if ai_disponivel:
         opcoes_menu.append("🤖 Analista IA")
         
-    menu = st.radio("Navegação do Sistema:", opciones_menu)
+    menu = st.radio("Navegação do Sistema:", opcoes_menu, key="navegacao_principal")
     st.markdown("---")
-    st.info("💡 **Dica:** Ative os Secrets para conversar diretamente com os seus dados.")
+    st.info("💡 **Dica:** Use a aba 'Importar' antes de gerar os gráficos.")
 
 # 4. FUNÇÃO DE APOIO: KPIs
 def mostrar_kpis(df):
@@ -98,6 +94,7 @@ elif menu == "📁 Importar & Extrair":
             else:
                 df = pd.read_excel(arquivo_subido)
             
+            # Força a conversão de colunas de tempo encontradas
             for col in df.columns:
                 if any(p in col.lower() for p in ['date', 'data', 'start', 'end']):
                     df[col] = pd.to_datetime(df[col], errors='coerce')
@@ -112,7 +109,7 @@ elif menu == "📁 Importar & Extrair":
             st.dataframe(df.head(100), use_container_width=True)
             
             with st.expander("🔍 Ver Análise Estatística Detalhada"):
-                st.write(df.describe(include='all', datetime_is_numeric=True).fillna("-"))
+                st.write(df.describe(include='all').fillna("-"))
         
         except Exception as e:
             st.error(f"Erro ao processar o ficheiro: {e}")
@@ -122,7 +119,7 @@ elif menu == "📁 Importar & Extrair":
 elif menu == "📈 Gráficos Interativos":
     st.title("📈 Dashboard de Insights")
     
-    if 'meu_df' in st.session_state:
+    if 'meu_df' in st.session_state and st.session_state['meu_df'] is not None:
         df = st.session_state['meu_df']
         c1, c2 = st.columns([1, 4])
         
@@ -137,7 +134,7 @@ elif menu == "📈 Gráficos Interativos":
                 if not colunas_num.empty:
                     y_final = st.selectbox("Coluna para Métrica", colunas_num)
                 else:
-                    st.error("Sem colunas numéricas.")
+                    st.error("Sem colunas numéricas neste arquivo.")
                     modo_y = "Contagem"
 
             tipo_grafico = st.selectbox("Estilo", ["Barras", "Linhas", "Área", "Dispersão"])
@@ -146,13 +143,20 @@ elif menu == "📈 Gráficos Interativos":
         with c2:
             st.subheader("Visualização")
             try:
+                # CORREÇÃO CRÍTICA DO ERRO DO PRINT:
+                # Verifica se o modo é contagem
                 if modo_y == "Contagem":
-                    df_plot = df.groupby(eixo_x).size().reset_index(name='Total')
+                    # Se for uma coluna de data válida, agrupa por dia de forma segura usando o Pandas
+                    if pd.api.types.is_datetime64_any_dtype(df[eixo_x]):
+                        df_plot = df.groupby(df[eixo_x].dt.date).size().reset_index(name='Total')
+                    else:
+                        df_plot = df.groupby(eixo_x).size().reset_index(name='Total')
                     y_plot = 'Total'
                 else:
                     df_plot = df
                     y_plot = y_final
 
+                # Gerando os gráficos com o dataframe tratado
                 if tipo_grafico == "Barras":
                     fig = px.bar(df_plot, x=eixo_x, y=y_plot, color=cor_por, template="plotly_white")
                 elif tipo_grafico == "Linhas":
@@ -166,61 +170,46 @@ elif menu == "📈 Gráficos Interativos":
             except Exception as e:
                 st.error(f"Erro ao gerar gráfico: {e}")
     else:
-        st.error("❌ Nenhum dado carregado. Vá à aba 'Importar'.")
+        st.error("❌ Nenhum dado carregado. Vá à aba 'Importar & Extrair'.")
 
-# --- NOVA PAGINA: CONSULTA INTERATIVA COM GEMINI ---
 elif menu == "🤖 Analista IA":
-    st.title("🤖 Consulta Interativa com Gemini 2.5")
+    st.title("🤖 Consulta Interativa com Gemini")
     
-    if 'meu_df' in st.session_state:
+    if 'meu_df' in st.session_state and st.session_state['meu_df'] is not None:
         df = st.session_state['meu_df']
         
-        st.markdown("""
-        Use esta inteligência para extrair insights rápidos. Você pode pedir resumos textuais, 
-        padrões ocultos ou orientações sobre quais variáveis cruzar.
-        """)
+        st.markdown("Use esta inteligência para extrair insights rápidos sobre as colunas carregadas.")
         
-        # Amostra dos dados estruturais enviados no prompt para economia de tokens e contexto ágil
         dados_resumo = df.head(10).to_string()
         tipos_colunas = df.dtypes.to_string()
         
-        pergunta = st.text_area(
-            "O que você deseja saber sobre esses dados?",
-            placeholder="Exemplo: Quais são as três principais conclusões que podemos tirar analisando essas colunas? Ou qual seria uma boa sugestão de gráfico de distribuição?"
-        )
+        pergunta = st.text_area("O que você deseja saber sobre esses dados?")
         
         if st.button("Enviar Pergunta ao Gemini"):
             if pergunta:
-                with st.spinner("Analisando estrutura e gerando resposta..."):
-                    # Construção do Contexto contextualizado (Prompt Engineering)
+                with st.spinner("Analisando..."):
                     prompt_sistema = f"""
-                    Você é um cientista de dados sênior e analista especialista.
-                    O usuário está trabalhando com um arquivo que possui a seguinte estrutura de colunas e tipos:
+                    Você é um analista especialista em dados.
+                    Estrutura do arquivo:
                     {tipos_colunas}
                     
-                    Aqui está uma amostra das primeiras 10 linhas deste arquivo:
+                    Amostra das 10 primeiras linhas:
                     {dados_resumo}
                     
-                    Responda à seguinte solicitação do usuário com base nessa estrutura, sendo direto, analítico e prático:
+                    Responda à seguinte pergunta:
                     "{pergunta}"
                     """
-                    
                     try:
-                        # Chamada utilizando o modelo recomendado gemini-2.5-flash
                         response = client.models.generate_content(
                             model='gemini-2.5-flash',
                             contents=prompt_sistema,
                         )
-                        
                         st.markdown("### 📝 Resposta do Analista IA:")
                         st.write(response.text)
-                        
                     except Exception as e:
                         st.error(f"Falha ao se comunicar com a API do Gemini: {e}")
-            else:
-                st.warning("Por favor, digite uma pergunta antes de enviar.")
     else:
-        st.error("❌ Nenhum dado carregado. Vá à aba 'Importar & Extrair' primeiro.")
+        st.error("❌ Nenhum dado carregado.")
 
 # 6. RODAPÉ
 st.markdown("---")
