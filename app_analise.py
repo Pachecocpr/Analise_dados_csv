@@ -70,7 +70,7 @@ def mostrar_kpis(df):
 
 # 5. LÓGICA DAS PÁGINAS
 if menu == "🏠 Painel Inicial":
-    st.title("Bem-vindo ao DataExtractor Pro")
+    st.title("Extrator De Dados-Pro")
     st.markdown("""
     Plataforma inteligente para conversão de dados brutos em insights e gráficos.
     
