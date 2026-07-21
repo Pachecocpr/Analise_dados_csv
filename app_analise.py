@@ -55,7 +55,7 @@ with st.sidebar:
     st.markdown("---")
     st.info("💡 **Dica:** Use a aba 'Importar' antes de gerar os gráficos.")
 
-# 4. FUNÇÃO DE APOIO: KPIs
+# 4. FUNÇÕES DE APOIO
 def mostrar_kpis(df):
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -69,16 +69,13 @@ def mostrar_kpis(df):
         cols_num = len(df.select_dtypes(include=['number']).columns)
         st.metric("Colunas Métricas", cols_num)
 
-# FUNÇÃO DE APOIO: LIMPEZA DE CÓDIGO DA IA
 def limpar_codigo_texto(texto: str) -> str:
-    """Remove blocos de código markdown ou trechos técnicos caso a IA os inclua por engano."""
-    # Remove blocos com sintaxe ```python ... ``` ou ``` ... ```
+    """Remove blocos de código markdown caso a IA os inclua por engano."""
     texto_limpo = re.sub(r'```[\s\S]*?```', '', texto)
     return texto_limpo.strip()
 
 # 5. LÓGICA DAS PÁGINAS
-# 5. LÓGICA DAS PÁGINAS
-if menu == "🏠 Painel Inicial":  # <-- AQUI DEVE SER 'if'
+if menu == "🏠 Painel Inicial":
     st.title("Extrator De Dados-Pro")
     st.markdown("""
     Plataforma inteligente para conversão de dados brutos em insights e gráficos.
@@ -87,10 +84,10 @@ if menu == "🏠 Painel Inicial":  # <-- AQUI DEVE SER 'if'
     * **CSV** (Separado por vírgulas)
     * **Excel** (.xlsx e .xls)
     """)
+    # URL limpa para evitar MediaFileStorageError
     st.image("https://streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png", width=200)
 
-elif menu == "📁 Importar & Extrair":  # <-- Os próximos continuam 'elif'
-    ...
+elif menu == "📁 Importar & Extrair":
     st.title("📁 Gestão de Ficheiros")
     
     arquivo_subido = st.file_uploader("Arraste o ficheiro aqui", type=["csv", "xlsx", "xls"])
@@ -184,31 +181,46 @@ elif menu == "🤖 Analista IA":
     if 'meu_df' in st.session_state and st.session_state['meu_df'] is not None:
         df = st.session_state['meu_df']
         
-        st.markdown("Use esta inteligência para extrair insights rápidos sobre as colunas carregadas.")
+        st.markdown("A IA analisará o **arquivo completo** para fornecer informações precisas.")
         
-        dados_resumo = df.head(10).to_string()
-        tipos_colunas = df.dtypes.to_string()
+        # --- VARREDURA COMPLETA DO ARQUIVO ---
+        total_linhas = len(df)
+        total_colunas = len(df.columns)
+        
+        # Gera estatísticas descritivas cobrindo 100% dos dados
+        resumo_estatistico = df.describe(include='all').fillna("-").to_string()
+        
+        # Mapeamento detalhado de cada coluna
+        info_colunas = []
+        for col in df.columns:
+            nulos = df[col].isnull().sum()
+            unicos = df[col].nunique()
+            info_colunas.append(f"- Coluna '{col}': tipo={df[col].dtype}, valores_unicos={unicos}, nulos={nulos}/{total_linhas}")
+        
+        resumo_colunas_str = "\n".join(info_colunas)
         
         pergunta = st.text_area("O que você deseja saber sobre esses dados?")
         
         if st.button("Enviar Pergunta ao Gemini"):
             if pergunta:
-                with st.spinner("Analisando..."):
+                with st.spinner("Analisando o arquivo completo..."):
                     prompt_sistema = f"""
-                    Você é um analista executivo de dados sênior. Responda diretamente ao usuário com base na estrutura do arquivo e na amostra fornecida.
+                    Você é um analista executivo de dados sênior. Você recebeu a varredura estatística completa de um arquivo com {total_linhas} linhas e {total_colunas} colunas.
+
+                    VARREDURA TOTAL DOS DADOS:
+                    Estatísticas descritivas cobrindo TODAS as {total_linhas} linhas do arquivo:
+                    {resumo_estatistico}
+
+                    Estrutura e integridade detalhada de todas as colunas:
+                    {resumo_colunas_str}
 
                     REGRAS DE RESPOSTA OBRIGATÓRIAS:
-                    1. Forneça APENAS respostas em texto claro, explicativo e em linguagem natural (português).
-                    2. É ESTRITAMENTE PROIBIDO incluir qualquer código Python, SQL, scripts ou sintaxe de programação.
-                    3. NÃO inclua blocos de código Markdown (como ```python ou ```).
-                    4. Foque exclusivamente nas conclusões, padrões nos dados e insights práticos.
+                    1. Responda com base na totalidade do arquivo ({total_linhas} linhas).
+                    2. Forneça APENAS respostas em texto claro, explicativo e em linguagem natural (português).
+                    3. É ESTRITAMENTE PROIBIDO incluir qualquer código Python, SQL, scripts ou sintaxe de programação.
+                    4. NÃO inclua blocos de código Markdown (como ```python ou ```).
+                    5. Concentre-se diretamente nas conclusões, respostas numéricas exatas e insights de negócios.
 
-                    Estrutura das colunas:
-                    {tipos_colunas}
-                    
-                    Amostra das 10 primeiras linhas:
-                    {dados_resumo}
-                    
                     Pergunta do usuário:
                     "{pergunta}"
                     """
@@ -218,7 +230,7 @@ elif menu == "🤖 Analista IA":
                             contents=prompt_sistema,
                         )
                         
-                        # Limpa qualquer resíduo de código que a IA possa ter gerado por engano
+                        # Garante a limpeza total de blocos técnicos acidentais
                         resposta_formatada = limpar_codigo_texto(response.text)
                         
                         st.markdown("### 📝 Resposta do Analista IA:")
