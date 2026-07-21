@@ -77,7 +77,8 @@ def limpar_codigo_texto(texto: str) -> str:
     return texto_limpo.strip()
 
 # 5. LÓGICA DAS PÁGINAS
-elif menu == "🏠 Painel Inicial":
+# 5. LÓGICA DAS PÁGINAS
+if menu == "🏠 Painel Inicial":  # <-- AQUI DEVE SER 'if'
     st.title("Extrator De Dados-Pro")
     st.markdown("""
     Plataforma inteligente para conversão de dados brutos em insights e gráficos.
@@ -86,9 +87,10 @@ elif menu == "🏠 Painel Inicial":
     * **CSV** (Separado por vírgulas)
     * **Excel** (.xlsx e .xls)
     """)
-    # Correção do st.image com a URL limpa:
     st.image("https://streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png", width=200)
-elif menu == "📁 Importar & Extrair":
+
+elif menu == "📁 Importar & Extrair":  # <-- Os próximos continuam 'elif'
+    ...
     st.title("📁 Gestão de Ficheiros")
     
     arquivo_subido = st.file_uploader("Arraste o ficheiro aqui", type=["csv", "xlsx", "xls"])
