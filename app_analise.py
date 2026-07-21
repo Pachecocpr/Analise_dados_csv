@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import re
 from google import genai
 
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -68,6 +69,13 @@ def mostrar_kpis(df):
         cols_num = len(df.select_dtypes(include=['number']).columns)
         st.metric("Colunas Métricas", cols_num)
 
+# FUNÇÃO DE APOIO: LIMPEZA DE CÓDIGO DA IA
+def limpar_codigo_texto(texto: str) -> str:
+    """Remove blocos de código markdown ou trechos técnicos caso a IA os inclua por engano."""
+    # Remove blocos com sintaxe ```python ... ``` ou ``` ... ```
+    texto_limpo = re.sub(r'```[\s\S]*?```', '', texto)
+    return texto_limpo.strip()
+
 # 5. LÓGICA DAS PÁGINAS
 if menu == "🏠 Painel Inicial":
     st.title("Extrator De Dados-Pro")
@@ -78,7 +86,7 @@ if menu == "🏠 Painel Inicial":
     * **CSV** (Separado por vírgulas)
     * **Excel** (.xlsx e .xls)
     """)
-    st.image("https://streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png", width=200)
+    st.image("[https://streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png](https://streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png)", width=200)
 
 elif menu == "📁 Importar & Extrair":
     st.title("📁 Gestão de Ficheiros")
@@ -143,10 +151,7 @@ elif menu == "📈 Gráficos Interativos":
         with c2:
             st.subheader("Visualização")
             try:
-                # CORREÇÃO CRÍTICA DO ERRO DO PRINT:
-                # Verifica se o modo é contagem
                 if modo_y == "Contagem":
-                    # Se for uma coluna de data válida, agrupa por dia de forma segura usando o Pandas
                     if pd.api.types.is_datetime64_any_dtype(df[eixo_x]):
                         df_plot = df.groupby(df[eixo_x].dt.date).size().reset_index(name='Total')
                     else:
@@ -156,7 +161,6 @@ elif menu == "📈 Gráficos Interativos":
                     df_plot = df
                     y_plot = y_final
 
-                # Gerando os gráficos com o dataframe tratado
                 if tipo_grafico == "Barras":
                     fig = px.bar(df_plot, x=eixo_x, y=y_plot, color=cor_por, template="plotly_white")
                 elif tipo_grafico == "Linhas":
@@ -189,14 +193,21 @@ elif menu == "🤖 Analista IA":
             if pergunta:
                 with st.spinner("Analisando..."):
                     prompt_sistema = f"""
-                    Você é um analista especialista em dados.
-                    Estrutura do arquivo:
+                    Você é um analista executivo de dados sênior. Responda diretamente ao usuário com base na estrutura do arquivo e na amostra fornecida.
+
+                    REGRAS DE RESPOSTA OBRIGATÓRIAS:
+                    1. Forneça APENAS respostas em texto claro, explicativo e em linguagem natural (português).
+                    2. É ESTRITAMENTE PROIBIDO incluir qualquer código Python, SQL, scripts ou sintaxe de programação.
+                    3. NÃO inclua blocos de código Markdown (como ```python ou ```).
+                    4. Foque exclusivamente nas conclusões, padrões nos dados e insights práticos.
+
+                    Estrutura das colunas:
                     {tipos_colunas}
                     
                     Amostra das 10 primeiras linhas:
                     {dados_resumo}
                     
-                    Responda à seguinte pergunta:
+                    Pergunta do usuário:
                     "{pergunta}"
                     """
                     try:
@@ -204,12 +215,16 @@ elif menu == "🤖 Analista IA":
                             model='gemini-2.5-flash',
                             contents=prompt_sistema,
                         )
+                        
+                        # Limpa qualquer resíduo de código que a IA possa ter gerado por engano
+                        resposta_formatada = limpar_codigo_texto(response.text)
+                        
                         st.markdown("### 📝 Resposta do Analista IA:")
-                        st.write(response.text)
+                        st.write(resposta_formatada)
                     except Exception as e:
                         st.error(f"Falha ao se comunicar com a API do Gemini: {e}")
     else:
-        st.error("❌ Nenhum dado carregado.")
+        st.error("❌ Nenhum dado carregado. Vá à aba 'Importar & Extrair'.")
 
 # 6. RODAPÉ
 st.markdown("---")
