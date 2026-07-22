@@ -44,7 +44,7 @@ if api_key:
 
 # 3. BARRA LATERAL (Sem risco de NameError)
 with st.sidebar:
-    st.title("🌐 Sistema de Dados - v1.3")
+    st.title("🖥️ Sistema de extração de Dados - v1.4")
     st.markdown("---")
     
     opcoes_menu = ["🏠 Painel Inicial", "📁 Importar & Extrair", "📈 Gráficos Interativos"]
