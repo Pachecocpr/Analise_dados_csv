@@ -8,7 +8,7 @@ from google import genai
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
     page_title="DataExtractor | Análise de Arquivos & IA",
-    page_icon="📊",
+    page_icon="🖥️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
